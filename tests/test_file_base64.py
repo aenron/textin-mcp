@@ -80,11 +80,13 @@ def test_upload_stores_file_and_returns_links(monkeypatch):
 
     storage_dir = temporary_storage_dir()
     monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+    monkeypatch.setenv("FILE_PUBLIC_BASE_URL", "http://files.example.test:8005")
     client = TestClient(create_app())
 
     response = client.post(
         "/upload",
         files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        headers={"accept": "application/json"},
     )
 
     assert response.status_code == 200
@@ -92,9 +94,31 @@ def test_upload_stores_file_and_returns_links(monkeypatch):
     assert payload["filename"] == "sample.pdf"
     assert payload["mime_type"] == "application/pdf"
     assert payload["size"] == 9
-    assert payload["download_url"] == f"/files/{payload['file_id']}"
-    assert payload["base64_url"] == f"/files/{payload['file_id']}/base64"
+    assert payload["download_url"] == f"http://files.example.test:8005/files/{payload['file_id']}"
+    assert payload["base64_url"] == (
+        f"http://files.example.test:8005/files/{payload['file_id']}/base64"
+    )
     assert (Path(storage_dir) / payload["file_id"]).read_bytes() == b"pdf-bytes"
+
+
+def test_browser_upload_returns_result_page(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    storage_dir = temporary_storage_dir()
+    monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+    monkeypatch.setenv("FILE_PUBLIC_BASE_URL", "http://files.example.test:8005")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/upload",
+        files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 200
+    assert "Upload complete" in response.text
+    assert "http://files.example.test:8005/files/" in response.text
+    assert "Back to upload" in response.text
 
 
 def test_download_returns_uploaded_file(monkeypatch):

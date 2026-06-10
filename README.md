@@ -135,12 +135,19 @@ The same service also provides a simple browser upload and download UI:
   "filename": "example.pdf",
   "mime_type": "application/pdf",
   "size": 12345,
-  "download_url": "/files/abc123",
-  "base64_url": "/files/abc123/base64"
+  "download_url": "http://168.8.6.168:8005/files/abc123",
+  "base64_url": "http://168.8.6.168:8005/files/abc123/base64"
 }
 ```
 
 Stored files are written under `FILE_STORAGE_DIR`, which defaults to `/data/files` in the container. Docker Compose mounts this path to the `file_storage` volume.
+
+Set `FILE_PUBLIC_BASE_URL` when users access the helper from another machine so upload results contain complete URLs with the reachable host:
+
+```powershell
+$env:FILE_PUBLIC_BASE_URL="http://168.8.6.168:8005"
+docker compose up --build
+```
 
 ## Tools
 

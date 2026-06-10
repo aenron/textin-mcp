@@ -26,6 +26,7 @@ services:
       FILE_BASE64_HOST: 0.0.0.0
       FILE_BASE64_PORT: 8001
       FILE_STORAGE_DIR: /data/files
+      FILE_PUBLIC_BASE_URL: ${FILE_PUBLIC_BASE_URL:-http://127.0.0.1:8005}
       MAX_FILE_BYTES: ${MAX_FILE_BYTES:-52428800}
     volumes:
       - file_storage:/data/files

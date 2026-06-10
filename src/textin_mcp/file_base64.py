@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 
@@ -51,6 +51,90 @@ def _file_payload(file_id: str, metadata: dict[str, Any], content: bytes) -> dic
     }
 
 
+def _public_base_url(request: Request) -> str:
+    configured = os.getenv("FILE_PUBLIC_BASE_URL")
+    if configured:
+        return configured.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def _upload_payload(file_id: str, metadata: dict[str, Any], base_url: str) -> dict[str, Any]:
+    return {
+        "file_id": file_id,
+        **metadata,
+        "download_url": f"{base_url}/files/{file_id}",
+        "base64_url": f"{base_url}/files/{file_id}/base64",
+    }
+
+
+def _upload_result_html(payload: dict[str, Any]) -> str:
+    filename = payload["filename"]
+    download_url = payload["download_url"]
+    base64_url = payload["base64_url"]
+    return f"""
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Upload complete</title>
+    <style>
+      body {{
+        font-family: Arial, sans-serif;
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 24px;
+        color: #1f2937;
+      }}
+      .panel {{
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 24px;
+        background: #f9fafb;
+      }}
+      dt {{
+        font-weight: 700;
+        margin-top: 16px;
+      }}
+      dd {{
+        margin: 6px 0 0;
+        overflow-wrap: anywhere;
+      }}
+      a.button {{
+        display: inline-block;
+        margin: 18px 12px 0 0;
+        padding: 10px 14px;
+        border-radius: 6px;
+        background: #2563eb;
+        color: white;
+        text-decoration: none;
+      }}
+      a.secondary {{
+        background: #4b5563;
+      }}
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h1>Upload complete</h1>
+      <dl>
+        <dt>Filename</dt>
+        <dd>{filename}</dd>
+        <dt>Size</dt>
+        <dd>{payload["size"]} bytes</dd>
+        <dt>Download URL</dt>
+        <dd><a href="{download_url}">{download_url}</a></dd>
+        <dt>Base64 URL</dt>
+        <dd><a href="{base64_url}">{base64_url}</a></dd>
+      </dl>
+      <a class="button" href="{download_url}">Download file</a>
+      <a class="button secondary" href="{base64_url}">Get base64 JSON</a>
+      <a class="button secondary" href="/">Back to upload</a>
+    </div>
+  </body>
+</html>
+"""
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="TextIn file base64 helper")
 
@@ -91,7 +175,7 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/upload")
-    async def upload(file: UploadFile = File(...)) -> dict[str, Any]:
+    async def upload(request: Request, file: UploadFile = File(...)) -> Any:
         content = await file.read()
         max_file_bytes = _max_file_bytes()
         if len(content) > max_file_bytes:
@@ -107,12 +191,10 @@ def create_app() -> FastAPI:
         }
         _file_path(file_id).write_bytes(content)
         _metadata_path(file_id).write_text(json.dumps(metadata), encoding="utf-8")
-        return {
-            "file_id": file_id,
-            **metadata,
-            "download_url": f"/files/{file_id}",
-            "base64_url": f"/files/{file_id}/base64",
-        }
+        payload = _upload_payload(file_id, metadata, _public_base_url(request))
+        if "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse(_upload_result_html(payload))
+        return payload
 
     @app.get("/files/{file_id}")
     async def download(file_id: str) -> FileResponse:
