@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import base64
+import tempfile
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+
+def temporary_storage_dir():
+    return tempfile.TemporaryDirectory(dir="C:\\tmp")
 
 
 def test_file_to_base64_returns_uploaded_file_payload():
@@ -51,3 +57,98 @@ def test_file_to_base64_sanitizes_filename():
 
     assert response.status_code == 200
     assert response.json()["filename"] == "sample.pdf"
+
+
+def test_home_page_contains_upload_form(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    with temporary_storage_dir() as storage_dir:
+        monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+        client = TestClient(create_app())
+
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "multipart/form-data" in response.text
+    assert "/upload" in response.text
+
+
+def test_upload_stores_file_and_returns_links(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    with temporary_storage_dir() as storage_dir:
+        monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+        client = TestClient(create_app())
+
+        response = client.post(
+            "/upload",
+            files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["filename"] == "sample.pdf"
+        assert payload["mime_type"] == "application/pdf"
+        assert payload["size"] == 9
+        assert payload["download_url"] == f"/files/{payload['file_id']}"
+        assert payload["base64_url"] == f"/files/{payload['file_id']}/base64"
+        assert (Path(storage_dir) / payload["file_id"]).read_bytes() == b"pdf-bytes"
+
+
+def test_download_returns_uploaded_file(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    with temporary_storage_dir() as storage_dir:
+        monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+        client = TestClient(create_app())
+        upload = client.post(
+            "/upload",
+            files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        ).json()
+
+        response = client.get(upload["download_url"])
+
+    assert response.status_code == 200
+    assert response.content == b"pdf-bytes"
+    assert response.headers["content-type"] == "application/pdf"
+    assert 'filename="sample.pdf"' in response.headers["content-disposition"]
+
+
+def test_uploaded_file_can_be_returned_as_base64(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    with temporary_storage_dir() as storage_dir:
+        monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+        client = TestClient(create_app())
+        upload = client.post(
+            "/upload",
+            files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        ).json()
+
+        response = client.get(upload["base64_url"])
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "file_id": upload["file_id"],
+        "filename": "sample.pdf",
+        "mime_type": "application/pdf",
+        "size": 9,
+        "base64": base64.b64encode(b"pdf-bytes").decode("ascii"),
+    }
+
+
+def test_upload_rejects_files_over_limit(monkeypatch):
+    from textin_mcp.file_base64 import create_app
+
+    with temporary_storage_dir() as storage_dir:
+        monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+        monkeypatch.setenv("MAX_FILE_BYTES", "4")
+        client = TestClient(create_app())
+
+        response = client.post(
+            "/upload",
+            files={"file": ("sample.pdf", b"pdf-bytes", "application/pdf")},
+        )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Uploaded file exceeds MAX_FILE_BYTES (4)"}

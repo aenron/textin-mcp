@@ -14,6 +14,8 @@ from mcp.server.fastmcp import FastMCP
 
 
 TableView = Literal["markdown", "html"]
+OptionalBoolInput = bool | str | None
+OptionalTableViewInput = TableView | str | None
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,31 @@ class ParseOptions:
     pages: bool | None = None
     title_tree: bool | None = None
     table_view: TableView | None = None
+
+
+def _empty_string_to_none(value: Any) -> Any:
+    return None if value == "" else value
+
+
+def _optional_bool(value: OptionalBoolInput) -> bool | None:
+    value = _empty_string_to_none(value)
+    if value is None or isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean value: {value}")
+
+
+def _optional_table_view(value: OptionalTableViewInput) -> TableView | None:
+    value = _empty_string_to_none(value)
+    if value is None:
+        return None
+    if value in ("markdown", "html"):
+        return value
+    raise ValueError("table_view must be 'markdown' or 'html'")
 
 
 def _load_xparse_symbols() -> tuple[Any, Any, Any, Any]:
@@ -73,6 +100,33 @@ def _build_parse_config(options: ParseOptions) -> Any:
     if options.password:
         config_values["document"] = Document(password=options.password)
     return ParseConfig(**config_values) if config_values else None
+
+
+def _parse_options(
+    *,
+    page_range: str | None,
+    password: str | None,
+    include_hierarchy: OptionalBoolInput,
+    include_inline_objects: OptionalBoolInput,
+    include_char_details: OptionalBoolInput,
+    include_image_data: OptionalBoolInput,
+    include_table_structure: OptionalBoolInput,
+    pages: OptionalBoolInput,
+    title_tree: OptionalBoolInput,
+    table_view: OptionalTableViewInput,
+) -> ParseOptions:
+    return ParseOptions(
+        page_range=_empty_string_to_none(page_range),
+        password=_empty_string_to_none(password),
+        include_hierarchy=_optional_bool(include_hierarchy),
+        include_inline_objects=_optional_bool(include_inline_objects),
+        include_char_details=_optional_bool(include_char_details),
+        include_image_data=_optional_bool(include_image_data),
+        include_table_structure=_optional_bool(include_table_structure),
+        pages=_optional_bool(pages),
+        title_tree=_optional_bool(title_tree),
+        table_view=_optional_table_view(table_view),
+    )
 
 
 def _client() -> Any:
@@ -149,19 +203,19 @@ def create_server() -> FastMCP:
         file_base64: str,
         page_range: str | None = None,
         password: str | None = None,
-        include_hierarchy: bool | None = None,
-        include_inline_objects: bool | None = None,
-        include_char_details: bool | None = None,
-        include_image_data: bool | None = None,
-        include_table_structure: bool | None = None,
-        pages: bool | None = None,
-        title_tree: bool | None = None,
-        table_view: TableView | None = None,
+        include_hierarchy: OptionalBoolInput = None,
+        include_inline_objects: OptionalBoolInput = None,
+        include_char_details: OptionalBoolInput = None,
+        include_image_data: OptionalBoolInput = None,
+        include_table_structure: OptionalBoolInput = None,
+        pages: OptionalBoolInput = None,
+        title_tree: OptionalBoolInput = None,
+        table_view: OptionalTableViewInput = None,
     ) -> dict[str, Any]:
         """Synchronously parse a document with TextIn xParse."""
         safe_name, file = _document_from_base64(filename, file_base64)
         config = _build_parse_config(
-            ParseOptions(
+            _parse_options(
                 page_range=page_range,
                 password=password,
                 include_hierarchy=include_hierarchy,
@@ -187,19 +241,19 @@ def create_server() -> FastMCP:
         webhook: str | None = None,
         page_range: str | None = None,
         password: str | None = None,
-        include_hierarchy: bool | None = None,
-        include_inline_objects: bool | None = None,
-        include_char_details: bool | None = None,
-        include_image_data: bool | None = None,
-        include_table_structure: bool | None = None,
-        pages: bool | None = None,
-        title_tree: bool | None = None,
-        table_view: TableView | None = None,
+        include_hierarchy: OptionalBoolInput = None,
+        include_inline_objects: OptionalBoolInput = None,
+        include_char_details: OptionalBoolInput = None,
+        include_image_data: OptionalBoolInput = None,
+        include_table_structure: OptionalBoolInput = None,
+        pages: OptionalBoolInput = None,
+        title_tree: OptionalBoolInput = None,
+        table_view: OptionalTableViewInput = None,
     ) -> dict[str, Any]:
         """Create an asynchronous TextIn xParse job."""
         safe_name, file = _document_from_base64(filename, file_base64)
         config = _build_parse_config(
-            ParseOptions(
+            _parse_options(
                 page_range=page_range,
                 password=password,
                 include_hierarchy=include_hierarchy,

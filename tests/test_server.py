@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import importlib
 import inspect
+import asyncio
 import sys
 import types
 
@@ -174,6 +175,42 @@ def test_parse_run_decodes_base64_content_for_sdk(monkeypatch):
     tool = server_module.create_server()._tool_manager._tools["parse_run"].fn
 
     result = tool(filename="../sample.pdf", file_base64=base64.b64encode(b"pdf-bytes").decode())
+
+    assert result["markdown"] == "ok"
+    assert sys.modules["xparse_client"].parse_calls == [
+        (
+            "run",
+            {
+                "filename": "sample.pdf",
+                "file_content": b"pdf-bytes",
+            },
+        )
+    ]
+
+
+def test_parse_run_treats_empty_optional_strings_as_unset(monkeypatch):
+    install_fake_xparse()
+    server_module = importlib.reload(importlib.import_module("textin_mcp.server"))
+    tool = server_module.create_server()._tool_manager._tools["parse_run"]
+
+    result = asyncio.run(
+        tool.run(
+            {
+                "filename": "sample.pdf",
+                "file_base64": base64.b64encode(b"pdf-bytes").decode(),
+                "page_range": "",
+                "password": "",
+                "include_hierarchy": "",
+                "include_inline_objects": "",
+                "include_char_details": "",
+                "include_image_data": "",
+                "include_table_structure": "",
+                "pages": "",
+                "title_tree": "",
+                "table_view": "",
+            }
+        )
+    )
 
     assert result["markdown"] == "ok"
     assert sys.modules["xparse_client"].parse_calls == [
