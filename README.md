@@ -142,6 +142,15 @@ The same service also provides a simple browser upload and download UI:
 
 Stored files are written under `FILE_STORAGE_DIR`, which defaults to `/data/files` in the container. Docker Compose mounts this path to the `file_storage` volume.
 
+Uploaded files are cleaned up automatically. By default, files older than 7 days are removed every hour:
+
+```powershell
+$env:FILE_RETENTION_SECONDS="604800"
+$env:FILE_CLEANUP_INTERVAL_SECONDS="3600"
+```
+
+Set `FILE_RETENTION_SECONDS=0` to disable automatic cleanup.
+
 Set `FILE_PUBLIC_BASE_URL` when users access the helper from another machine so upload results contain complete URLs with the reachable host:
 
 ```powershell

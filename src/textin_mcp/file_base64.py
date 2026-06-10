@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -13,6 +15,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 def _max_file_bytes() -> int:
     return int(os.getenv("MAX_FILE_BYTES", str(50 * 1024 * 1024)))
+
+
+def _file_retention_seconds() -> int:
+    return int(os.getenv("FILE_RETENTION_SECONDS", str(7 * 24 * 60 * 60)))
+
+
+def _cleanup_interval_seconds() -> int:
+    return int(os.getenv("FILE_CLEANUP_INTERVAL_SECONDS", str(60 * 60)))
 
 
 def _storage_dir() -> Path:
@@ -39,6 +49,27 @@ def _read_metadata(file_id: str) -> dict[str, Any]:
     if not metadata_path.is_file() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def _cleanup_expired_files(now: float | None = None) -> dict[str, int]:
+    retention_seconds = _file_retention_seconds()
+    if retention_seconds <= 0:
+        return {"deleted_files": 0}
+
+    cutoff = (now if now is not None else time.time()) - retention_seconds
+    deleted_files = 0
+    for path in _storage_dir().iterdir():
+        if not path.is_file() or path.stat().st_mtime >= cutoff:
+            continue
+        path.unlink()
+        deleted_files += 1
+    return {"deleted_files": deleted_files}
+
+
+async def _cleanup_loop() -> None:
+    while True:
+        _cleanup_expired_files()
+        await asyncio.sleep(_cleanup_interval_seconds())
 
 
 def _file_payload(file_id: str, metadata: dict[str, Any], content: bytes) -> dict[str, Any]:
@@ -137,6 +168,16 @@ def _upload_result_html(payload: dict[str, Any]) -> str:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="TextIn file base64 helper")
+
+    @app.on_event("startup")
+    async def start_cleanup_loop() -> None:
+        app.state.cleanup_task = asyncio.create_task(_cleanup_loop())
+
+    @app.on_event("shutdown")
+    async def stop_cleanup_loop() -> None:
+        cleanup_task = getattr(app.state, "cleanup_task", None)
+        if cleanup_task is not None:
+            cleanup_task.cancel()
 
     @app.get("/", response_class=HTMLResponse)
     async def home() -> str:

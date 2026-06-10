@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -178,3 +180,53 @@ def test_upload_rejects_files_over_limit(monkeypatch):
 
     assert response.status_code == 413
     assert response.json() == {"detail": "Uploaded file exceeds MAX_FILE_BYTES (4)"}
+
+
+def test_cleanup_removes_files_older_than_retention(monkeypatch):
+    from textin_mcp.file_base64 import _cleanup_expired_files
+
+    storage_dir = temporary_storage_dir()
+    monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+    monkeypatch.setenv("FILE_RETENTION_SECONDS", "10")
+    old_file = Path(storage_dir) / "old-id"
+    old_metadata = Path(storage_dir) / "old-id.json"
+    new_file = Path(storage_dir) / "new-id"
+    new_metadata = Path(storage_dir) / "new-id.json"
+    old_file.write_bytes(b"old")
+    old_metadata.write_text("{}", encoding="utf-8")
+    new_file.write_bytes(b"new")
+    new_metadata.write_text("{}", encoding="utf-8")
+    old_time = time.time() - 20
+    os.utime(old_file, (old_time, old_time))
+    os.utime(old_metadata, (old_time, old_time))
+    deleted_paths = []
+
+    def record_unlink(path):
+        deleted_paths.append(path)
+
+    monkeypatch.setattr(Path, "unlink", record_unlink)
+
+    result = _cleanup_expired_files()
+
+    assert result == {"deleted_files": 2}
+    assert old_file in deleted_paths
+    assert old_metadata in deleted_paths
+    assert new_file not in deleted_paths
+    assert new_metadata not in deleted_paths
+
+
+def test_cleanup_is_disabled_when_retention_is_zero(monkeypatch):
+    from textin_mcp.file_base64 import _cleanup_expired_files
+
+    storage_dir = temporary_storage_dir()
+    monkeypatch.setenv("FILE_STORAGE_DIR", storage_dir)
+    monkeypatch.setenv("FILE_RETENTION_SECONDS", "0")
+    old_file = Path(storage_dir) / "old-id"
+    old_file.write_bytes(b"old")
+    old_time = time.time() - 20
+    os.utime(old_file, (old_time, old_time))
+
+    result = _cleanup_expired_files()
+
+    assert result == {"deleted_files": 0}
+    assert old_file.exists()
