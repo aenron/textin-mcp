@@ -82,7 +82,7 @@ Or run with Docker Compose:
 docker compose up --build
 ```
 
-Compose reads `TEXTIN_APP_ID`, `TEXTIN_SECRET_CODE`, optional `TEXTIN_SERVER_URL`, and optional `MAX_FILE_BYTES` from your environment or `.env` file. It starts the MCP SSE service on host port `8000` and the file-to-base64 helper on host port `8005`.
+Compose reads `TEXTIN_APP_ID`, `TEXTIN_SECRET_CODE`, optional `TEXTIN_SERVER_URL`, and optional `MAX_FILE_BYTES` from your environment or `.env` file. It starts the MCP SSE service on host port `8004` and the file-to-base64 helper on host port `8005`.
 
 ## File to Base64 Helper
 
@@ -119,6 +119,28 @@ Response:
   "base64": "JVBERi0x..."
 }
 ```
+
+The same service also provides a simple browser upload and download UI:
+
+- `GET /`: upload page
+- `POST /upload`: upload and store a file
+- `GET /files/{file_id}`: download a stored file
+- `GET /files/{file_id}/base64`: get stored file content as base64
+
+`POST /upload` returns:
+
+```json
+{
+  "file_id": "abc123",
+  "filename": "example.pdf",
+  "mime_type": "application/pdf",
+  "size": 12345,
+  "download_url": "/files/abc123",
+  "base64_url": "/files/abc123/base64"
+}
+```
+
+Stored files are written under `FILE_STORAGE_DIR`, which defaults to `/data/files` in the container. Docker Compose mounts this path to the `file_storage` volume.
 
 ## Tools
 

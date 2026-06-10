@@ -4,4 +4,5 @@ __pycache__/
 pytest-cache-files-*/
 .venv/
 .env
+.file-storage-test/
 docker-compose.yaml

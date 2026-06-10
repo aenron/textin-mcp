@@ -25,8 +25,14 @@ services:
     environment:
       FILE_BASE64_HOST: 0.0.0.0
       FILE_BASE64_PORT: 8001
+      FILE_STORAGE_DIR: /data/files
       MAX_FILE_BYTES: ${MAX_FILE_BYTES:-52428800}
+    volumes:
+      - file_storage:/data/files
 
 networks:
   mcp_out_net:
     external: true
+
+volumes:
+  file_storage:
