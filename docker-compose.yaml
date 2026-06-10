@@ -5,7 +5,7 @@ services:
     ports:
       - "8004:8000"
     networks:
-      - mcp_out_net
+      - mcp-proxy_mcp_out_net
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8000
@@ -21,7 +21,7 @@ services:
     ports:
       - "8005:8001"
     networks:
-      - mcp_out_net
+      - mcp-proxy_mcp_out_net
     environment:
       FILE_BASE64_HOST: 0.0.0.0
       FILE_BASE64_PORT: 8001
@@ -31,7 +31,7 @@ services:
       - file_storage:/data/files
 
 networks:
-  mcp_out_net:
+  mcp-proxy_mcp_out_net:
     external: true
 
 volumes:
