@@ -1,0 +1,21 @@
+[project]
+name = "textin-mcp"
+version = "0.1.0"
+description = "SSE MCP server for TextIn xParse document parsing."
+requires-python = ">=3.9"
+dependencies = [
+    "mcp>=1.27.0",
+    "xparse-client>=0.7.1",
+]
+
+[project.scripts]
+textin-mcp = "textin_mcp.server:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
