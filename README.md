@@ -83,6 +83,14 @@ docker run --rm -p 8000:8000 `
   textin-mcp
 ```
 
+Or run with Docker Compose:
+
+```powershell
+docker compose up --build
+```
+
+Compose reads `TEXTIN_APP_ID`, `TEXTIN_SECRET_CODE`, and optional `TEXTIN_SERVER_URL` from your environment or `.env` file. Local documents can be placed under `./documents` and used through container paths such as `/documents/example.pdf`.
+
 ## Tools
 
 ### `parse_run`

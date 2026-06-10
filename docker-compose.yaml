@@ -1,0 +1,14 @@
+services:
+  textin-mcp:
+    build: .
+    image: textin-mcp:latest
+    ports:
+      - "8000:8000"
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8000
+      TEXTIN_APP_ID: ${TEXTIN_APP_ID}
+      TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE}
+      TEXTIN_SERVER_URL: ${TEXTIN_SERVER_URL:-}
+    volumes:
+      - ./documents:/documents:ro
