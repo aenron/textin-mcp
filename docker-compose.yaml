@@ -4,6 +4,8 @@ services:
     image: textin-mcp:latest
     ports:
       - "8000:8000"
+    networks:
+      - mcp_out_net
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8000
@@ -12,3 +14,7 @@ services:
       TEXTIN_SERVER_URL: ${TEXTIN_SERVER_URL:-}
     volumes:
       - ./documents:/documents:ro
+
+networks:
+  mcp_out_net:
+    external: true
