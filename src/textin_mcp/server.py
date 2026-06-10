@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
 
@@ -80,11 +83,22 @@ def _client() -> Any:
     return XParseClient()
 
 
-def _file_path(path: str) -> Path:
-    document = Path(path).expanduser().resolve()
-    if not document.is_file():
-        raise FileNotFoundError(f"Document file does not exist: {document}")
-    return document
+def _max_file_bytes() -> int:
+    return int(os.getenv("MAX_FILE_BYTES", str(50 * 1024 * 1024)))
+
+
+def _document_from_base64(filename: str, file_base64: str) -> tuple[str, BytesIO]:
+    safe_name = Path(filename).name
+    if not safe_name:
+        raise ValueError("filename must not be empty")
+    try:
+        content = base64.b64decode(file_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("file_base64 must be valid base64 content") from exc
+    max_file_bytes = _max_file_bytes()
+    if len(content) > max_file_bytes:
+        raise ValueError(f"Decoded file exceeds MAX_FILE_BYTES ({max_file_bytes})")
+    return safe_name, BytesIO(content)
 
 
 def _to_plain(value: Any) -> Any:
@@ -131,7 +145,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     def parse_run(
-        file_path: str,
+        filename: str,
+        file_base64: str,
         page_range: str | None = None,
         password: str | None = None,
         include_hierarchy: bool | None = None,
@@ -144,7 +159,7 @@ def create_server() -> FastMCP:
         table_view: TableView | None = None,
     ) -> dict[str, Any]:
         """Synchronously parse a document with TextIn xParse."""
-        document = _file_path(file_path)
+        safe_name, file = _document_from_base64(filename, file_base64)
         config = _build_parse_config(
             ParseOptions(
                 page_range=page_range,
@@ -159,16 +174,16 @@ def create_server() -> FastMCP:
                 table_view=table_view,
             )
         )
-        with document.open("rb") as file:
-            kwargs = {"file": file, "filename": document.name}
-            if config is not None:
-                kwargs["config"] = config
-            result = _client().parse.run(**kwargs)
+        kwargs = {"file": file, "filename": safe_name}
+        if config is not None:
+            kwargs["config"] = config
+        result = _client().parse.run(**kwargs)
         return _result_summary(result)
 
     @mcp.tool()
     def parse_create_job(
-        file_path: str,
+        filename: str,
+        file_base64: str,
         webhook: str | None = None,
         page_range: str | None = None,
         password: str | None = None,
@@ -182,7 +197,7 @@ def create_server() -> FastMCP:
         table_view: TableView | None = None,
     ) -> dict[str, Any]:
         """Create an asynchronous TextIn xParse job."""
-        document = _file_path(file_path)
+        safe_name, file = _document_from_base64(filename, file_base64)
         config = _build_parse_config(
             ParseOptions(
                 page_range=page_range,
@@ -197,13 +212,12 @@ def create_server() -> FastMCP:
                 table_view=table_view,
             )
         )
-        with document.open("rb") as file:
-            kwargs = {"file": file, "filename": document.name}
-            if webhook:
-                kwargs["webhook"] = webhook
-            if config is not None:
-                kwargs["config"] = config
-            result = _client().parse.create_job(**kwargs)
+        kwargs = {"file": file, "filename": safe_name}
+        if webhook:
+            kwargs["webhook"] = webhook
+        if config is not None:
+            kwargs["config"] = config
+        result = _client().parse.create_job(**kwargs)
         return _to_plain(result)
 
     @mcp.tool()

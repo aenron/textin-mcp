@@ -4,12 +4,16 @@ version = "0.1.0"
 description = "SSE MCP server for TextIn xParse document parsing."
 requires-python = ">=3.9"
 dependencies = [
+    "fastapi>=0.110.0",
     "mcp>=1.27.0",
+    "python-multipart>=0.0.9",
+    "uvicorn>=0.27.0",
     "xparse-client>=0.3.0",
 ]
 
 [project.scripts]
 textin-mcp = "textin_mcp.server:main"
+textin-file-base64 = "textin_mcp.file_base64:main"
 
 [project.optional-dependencies]
 dev = [

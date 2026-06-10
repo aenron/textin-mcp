@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib
 import inspect
 import sys
@@ -9,6 +10,7 @@ import types
 def install_fake_xparse() -> None:
     module = types.ModuleType("xparse_client")
     module.client_calls = []
+    module.parse_calls = []
 
     class Record:
         def __init__(self, **kwargs):
@@ -20,6 +22,16 @@ def install_fake_xparse() -> None:
     class XParseClient:
         def __init__(self, **kwargs):
             module.client_calls.append(kwargs)
+            self.parse = Parse()
+
+    class Parse:
+        def run(self, **kwargs):
+            module.parse_calls.append(("run", _plain_parse_kwargs(kwargs)))
+            return {"markdown": "ok", "elements": [], "pages": []}
+
+        def create_job(self, **kwargs):
+            module.parse_calls.append(("create_job", _plain_parse_kwargs(kwargs)))
+            return {"job_id": "job-1"}
 
     module.XParseClient = XParseClient
     module.ParseConfig = type("ParseConfig", (Record,), {})
@@ -27,6 +39,13 @@ def install_fake_xparse() -> None:
     module.Scope = type("Scope", (Record,), {})
     module.Document = type("Document", (Record,), {})
     sys.modules["xparse_client"] = module
+
+
+def _plain_parse_kwargs(kwargs):
+    plain = dict(kwargs)
+    file = plain.pop("file")
+    plain["file_content"] = file.read()
+    return plain
 
 
 def install_fake_xparse_with_document_config() -> None:
@@ -70,6 +89,19 @@ def test_parse_options_do_not_include_credentials():
         assert "secret" not in schema_text.lower()
         assert "TEXTIN_APP_ID" not in schema_text
         assert "TEXTIN_SECRET_CODE" not in schema_text
+
+
+def test_parse_tools_accept_base64_document_content():
+    from textin_mcp.server import create_server
+
+    server = create_server()
+    tools = server._tool_manager._tools
+
+    for name in ("parse_run", "parse_create_job"):
+        schema_text = str(tools[name].parameters)
+        assert "filename" in schema_text
+        assert "file_base64" in schema_text
+        assert "file_path" not in schema_text
 
 
 def test_build_parse_config_uses_documented_fields(monkeypatch):
@@ -133,6 +165,49 @@ def test_client_uses_configured_server_url(monkeypatch):
 
     assert sys.modules["xparse_client"].client_calls == [
         {"server_url": "https://textin.example.test"}
+    ]
+
+
+def test_parse_run_decodes_base64_content_for_sdk(monkeypatch):
+    install_fake_xparse()
+    server_module = importlib.reload(importlib.import_module("textin_mcp.server"))
+    tool = server_module.create_server()._tool_manager._tools["parse_run"].fn
+
+    result = tool(filename="../sample.pdf", file_base64=base64.b64encode(b"pdf-bytes").decode())
+
+    assert result["markdown"] == "ok"
+    assert sys.modules["xparse_client"].parse_calls == [
+        (
+            "run",
+            {
+                "filename": "sample.pdf",
+                "file_content": b"pdf-bytes",
+            },
+        )
+    ]
+
+
+def test_parse_create_job_decodes_base64_content_for_sdk(monkeypatch):
+    install_fake_xparse()
+    server_module = importlib.reload(importlib.import_module("textin_mcp.server"))
+    tool = server_module.create_server()._tool_manager._tools["parse_create_job"].fn
+
+    result = tool(
+        filename="sample.pdf",
+        file_base64=base64.b64encode(b"pdf-bytes").decode(),
+        webhook="https://callback.example.test",
+    )
+
+    assert result == {"job_id": "job-1"}
+    assert sys.modules["xparse_client"].parse_calls == [
+        (
+            "create_job",
+            {
+                "filename": "sample.pdf",
+                "file_content": b"pdf-bytes",
+                "webhook": "https://callback.example.test",
+            },
+        )
     ]
 
 

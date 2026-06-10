@@ -35,6 +35,8 @@ $env:TEXTIN_SERVER_URL="https://your-server.example.com"
 
 When `TEXTIN_SERVER_URL` is unset, the official SDK default server is used.
 
+The MCP tools accept file content as base64. Decoded file size is limited by `MAX_FILE_BYTES`, which defaults to `52428800` bytes.
+
 ## Run
 
 ```powershell
@@ -70,16 +72,7 @@ docker run --rm -p 8000:8000 `
   -e TEXTIN_APP_ID="your-app-id" `
   -e TEXTIN_SECRET_CODE="your-secret-code" `
   -e TEXTIN_SERVER_URL="https://your-server.example.com" `
-  textin-mcp
-```
-
-If documents are on the host, mount a directory and pass container paths to the MCP tools:
-
-```powershell
-docker run --rm -p 8000:8000 `
-  -e TEXTIN_APP_ID="your-app-id" `
-  -e TEXTIN_SECRET_CODE="your-secret-code" `
-  -v "D:\docs:/documents:ro" `
+  -e MAX_FILE_BYTES="52428800" `
   textin-mcp
 ```
 
@@ -89,7 +82,43 @@ Or run with Docker Compose:
 docker compose up --build
 ```
 
-Compose reads `TEXTIN_APP_ID`, `TEXTIN_SECRET_CODE`, and optional `TEXTIN_SERVER_URL` from your environment or `.env` file. Local documents can be placed under `./documents` and used through container paths such as `/documents/example.pdf`.
+Compose reads `TEXTIN_APP_ID`, `TEXTIN_SECRET_CODE`, optional `TEXTIN_SERVER_URL`, and optional `MAX_FILE_BYTES` from your environment or `.env` file. It starts the MCP SSE service on host port `8000` and the file-to-base64 helper on host port `8005`.
+
+## File to Base64 Helper
+
+The helper is a regular HTTP service, not an MCP SSE endpoint. It accepts a multipart file upload and returns the payload needed by `parse_run` or `parse_create_job`.
+
+Run locally:
+
+```powershell
+textin-file-base64
+```
+
+By default it listens on `0.0.0.0:8001`. Override with:
+
+```powershell
+$env:FILE_BASE64_HOST="0.0.0.0"
+$env:FILE_BASE64_PORT="8001"
+textin-file-base64
+```
+
+Request:
+
+```powershell
+curl.exe -X POST "http://127.0.0.1:8005/file-to-base64" `
+  -F "file=@D:\docs\example.pdf"
+```
+
+Response:
+
+```json
+{
+  "filename": "example.pdf",
+  "mime_type": "application/pdf",
+  "size": 12345,
+  "base64": "JVBERi0x..."
+}
+```
 
 ## Tools
 
@@ -99,7 +128,8 @@ Synchronously parse a local document.
 
 Parameters:
 
-- `file_path`: local document path
+- `filename`: document filename, for example `example.pdf`
+- `file_base64`: base64-encoded document content
 - `page_range`: optional page range, for example `1-10`
 - `password`: optional encrypted PDF password
 - `include_hierarchy`
@@ -117,7 +147,8 @@ Create an asynchronous parsing job.
 
 Parameters:
 
-- `file_path`
+- `filename`: document filename, for example `example.pdf`
+- `file_base64`: base64-encoded document content
 - `webhook`: optional completion callback URL
 - all parse configuration parameters supported by `parse_run`
 

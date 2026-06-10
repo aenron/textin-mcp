@@ -3,7 +3,7 @@ services:
     build: .
     image: textin-mcp:latest
     ports:
-      - "8000:8000"
+      - "8004:8000"
     networks:
       - mcp_out_net
     environment:
@@ -12,8 +12,20 @@ services:
       TEXTIN_APP_ID: ${TEXTIN_APP_ID}
       TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE}
       TEXTIN_SERVER_URL: ${TEXTIN_SERVER_URL:-}
-    volumes:
-      - ./documents:/documents:ro
+      MAX_FILE_BYTES: ${MAX_FILE_BYTES:-52428800}
+
+  file-base64:
+    build: .
+    image: textin-mcp:latest
+    command: ["textin-file-base64"]
+    ports:
+      - "8005:8001"
+    networks:
+      - mcp_out_net
+    environment:
+      FILE_BASE64_HOST: 0.0.0.0
+      FILE_BASE64_PORT: 8001
+      MAX_FILE_BYTES: ${MAX_FILE_BYTES:-52428800}
 
 networks:
   mcp_out_net:
