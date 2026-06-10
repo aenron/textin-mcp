@@ -5,7 +5,7 @@ description = "SSE MCP server for TextIn xParse document parsing."
 requires-python = ">=3.9"
 dependencies = [
     "mcp>=1.27.0",
-    "xparse-client>=0.7.1",
+    "xparse-client>=0.3.0",
 ]
 
 [project.scripts]
