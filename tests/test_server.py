@@ -80,6 +80,7 @@ def test_parse_options_do_not_include_credentials():
 
     assert set(tools) == {
         "parse_run",
+        "parse_run_url",
         "parse_create_job",
         "parse_get_job",
         "parse_wait_job",
@@ -103,6 +104,17 @@ def test_parse_tools_accept_base64_document_content():
         assert "filename" in schema_text
         assert "file_base64" in schema_text
         assert "file_path" not in schema_text
+
+
+def test_parse_run_url_accepts_file_url_instead_of_base64():
+    from textin_mcp.server import create_server
+
+    server = create_server()
+    schema_text = str(server._tool_manager._tools["parse_run_url"].parameters)
+
+    assert "file_url" in schema_text
+    assert "file_base64" not in schema_text
+    assert "file_path" not in schema_text
 
 
 def test_build_parse_config_uses_documented_fields(monkeypatch):
@@ -218,6 +230,39 @@ def test_parse_run_treats_empty_optional_strings_as_unset(monkeypatch):
             "run",
             {
                 "filename": "sample.pdf",
+                "file_content": b"pdf-bytes",
+            },
+        )
+    ]
+
+
+def test_parse_run_url_downloads_file_for_sdk(monkeypatch):
+    install_fake_xparse()
+    server_module = importlib.reload(importlib.import_module("textin_mcp.server"))
+
+    class Response:
+        headers = {"content-type": "application/pdf"}
+        content = b"pdf-bytes"
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, timeout):
+        assert url == "http://files.example.test:8005/files/file-id"
+        assert timeout == 60.0
+        return Response()
+
+    monkeypatch.setattr(server_module.httpx, "get", get)
+    tool = server_module.create_server()._tool_manager._tools["parse_run_url"].fn
+
+    result = tool(file_url="http://files.example.test:8005/files/file-id")
+
+    assert result["markdown"] == "ok"
+    assert sys.modules["xparse_client"].parse_calls == [
+        (
+            "run",
+            {
+                "filename": "file-id",
                 "file_content": b"pdf-bytes",
             },
         )

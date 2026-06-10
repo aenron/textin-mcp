@@ -2,9 +2,10 @@
 
 SSE MCP server for TextIn xParse document parsing.
 
-The server exposes the four Python SDK methods documented by TextIn:
+The server exposes these MCP tools:
 
 - `parse_run`: maps to `client.parse.run()`
+- `parse_run_url`: downloads a file URL, then maps to `client.parse.run()`
 - `parse_create_job`: maps to `client.parse.create_job()`
 - `parse_get_job`: maps to `client.parse.get_job()`
 - `parse_wait_job`: maps to `client.parse.wait_job()`
@@ -35,7 +36,7 @@ $env:TEXTIN_SERVER_URL="https://your-server.example.com"
 
 When `TEXTIN_SERVER_URL` is unset, the official SDK default server is used.
 
-The MCP tools accept file content as base64. Decoded file size is limited by `MAX_FILE_BYTES`, which defaults to `52428800` bytes.
+The MCP tools accept file content as base64 or as a downloadable file URL. Decoded or downloaded file size is limited by `MAX_FILE_BYTES`, which defaults to `52428800` bytes.
 
 ## Run
 
@@ -162,7 +163,7 @@ docker compose up --build
 
 ### `parse_run`
 
-Synchronously parse a local document.
+Synchronously parse a base64-encoded document.
 
 Parameters:
 
@@ -178,6 +179,16 @@ Parameters:
 - `pages`
 - `title_tree`
 - `table_view`: `markdown` or `html`
+
+### `parse_run_url`
+
+Synchronously parse a document from a downloadable file URL.
+
+Parameters:
+
+- `file_url`: downloadable file URL, for example `http://168.8.6.168:8005/files/abc123`
+- `filename`: optional document filename override; when omitted, the filename is inferred from `file_url`
+- all parse configuration parameters supported by `parse_run`
 
 ### `parse_create_job`
 

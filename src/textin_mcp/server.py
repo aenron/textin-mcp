@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import unquote, urlparse
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
 
@@ -155,6 +157,25 @@ def _document_from_base64(filename: str, file_base64: str) -> tuple[str, BytesIO
     return safe_name, BytesIO(content)
 
 
+def _filename_from_url(file_url: str) -> str:
+    parsed = urlparse(file_url)
+    filename = Path(unquote(parsed.path)).name
+    return filename or "document"
+
+
+def _document_from_url(file_url: str, filename: str | None = None) -> tuple[str, BytesIO]:
+    response = httpx.get(file_url, timeout=60.0)
+    response.raise_for_status()
+    content = response.content
+    max_file_bytes = _max_file_bytes()
+    if len(content) > max_file_bytes:
+        raise ValueError(f"Downloaded file exceeds MAX_FILE_BYTES ({max_file_bytes})")
+    safe_name = Path(filename or _filename_from_url(file_url)).name
+    if not safe_name:
+        raise ValueError("filename must not be empty")
+    return safe_name, BytesIO(content)
+
+
 def _to_plain(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -214,6 +235,43 @@ def create_server() -> FastMCP:
     ) -> dict[str, Any]:
         """Synchronously parse a document with TextIn xParse."""
         safe_name, file = _document_from_base64(filename, file_base64)
+        config = _build_parse_config(
+            _parse_options(
+                page_range=page_range,
+                password=password,
+                include_hierarchy=include_hierarchy,
+                include_inline_objects=include_inline_objects,
+                include_char_details=include_char_details,
+                include_image_data=include_image_data,
+                include_table_structure=include_table_structure,
+                pages=pages,
+                title_tree=title_tree,
+                table_view=table_view,
+            )
+        )
+        kwargs = {"file": file, "filename": safe_name}
+        if config is not None:
+            kwargs["config"] = config
+        result = _client().parse.run(**kwargs)
+        return _result_summary(result)
+
+    @mcp.tool()
+    def parse_run_url(
+        file_url: str,
+        filename: str | None = None,
+        page_range: str | None = None,
+        password: str | None = None,
+        include_hierarchy: OptionalBoolInput = None,
+        include_inline_objects: OptionalBoolInput = None,
+        include_char_details: OptionalBoolInput = None,
+        include_image_data: OptionalBoolInput = None,
+        include_table_structure: OptionalBoolInput = None,
+        pages: OptionalBoolInput = None,
+        title_tree: OptionalBoolInput = None,
+        table_view: OptionalTableViewInput = None,
+    ) -> dict[str, Any]:
+        """Synchronously parse a document from a downloadable file URL with TextIn xParse."""
+        safe_name, file = _document_from_url(file_url, filename)
         config = _build_parse_config(
             _parse_options(
                 page_range=page_range,
